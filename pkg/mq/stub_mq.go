@@ -5,6 +5,11 @@ import (
 	"sync"
 )
 
+const (
+	ErrQueueFull         = "queue is full"
+	ErrAlreadySubscribed = "already subscribed to topic"
+)
+
 type StubMQ struct {
 	queues     map[string]chan Message
 	bufferSize int
@@ -19,19 +24,21 @@ func NewMessageQueueStub(bufferSize int) *StubMQ {
 }
 
 func (mq *StubMQ) Publish(msg Message) error {
-	mq.mu.RLock()
-	defer mq.mu.RUnlock()
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
 
 	queue, exists := mq.queues[msg.Topic]
 	if !exists {
-		return errors.New("topic not subscribed")
+		// Create a new channel if no subscription exists
+		queue = make(chan Message, mq.bufferSize)
+		mq.queues[msg.Topic] = queue
 	}
 
 	select {
 	case queue <- msg:
 		return nil
 	default:
-		return errors.New("queue is full")
+		return errors.New(ErrQueueFull)
 	}
 }
 
@@ -39,12 +46,13 @@ func (mq *StubMQ) Subscribe(topic string) (<-chan Message, error) {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
 
-	if _, exists := mq.queues[topic]; exists {
-		return nil, errors.New("already subscribed to topic")
+	queue, exists := mq.queues[topic]
+	if !exists {
+		// Create a new channel if no subscription exists
+		queue = make(chan Message, mq.bufferSize)
+		mq.queues[topic] = queue
 	}
 
-	queue := make(chan Message, mq.bufferSize)
-	mq.queues[topic] = queue
 	return queue, nil
 }
 
@@ -54,7 +62,7 @@ func (mq *StubMQ) Unsubscribe(topic string) error {
 
 	queue, exists := mq.queues[topic]
 	if !exists {
-		return errors.New("not subscribed to topic")
+		return ErrNotSubscribedToTopic
 	}
 
 	close(queue)

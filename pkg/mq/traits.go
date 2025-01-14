@@ -1,5 +1,11 @@
 package mq
 
+import "errors"
+
+var (
+	ErrNotSubscribedToTopic = errors.New("not subscribed to topic")
+)
+
 type Message struct {
 	Topic string
 	Value string
