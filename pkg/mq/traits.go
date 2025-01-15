@@ -1,18 +1,20 @@
 package mq
 
-import "errors"
-
-var (
-	ErrNotSubscribedToTopic = errors.New("not subscribed to topic")
+import (
+	"errors"
 )
 
 type Message struct {
-	Topic string
-	Value string
+	Data    string
+	ReplyTo string
 }
 
 type MessageQueue interface {
-	Publish(msg Message) error
-	Subscribe(topic string) (<-chan Message, error)
-	Unsubscribe(topic string) error
+	Request(msg Message) (<-chan Message, error)
+	RegisterHandler(handler func(Message) Message) error
+	Close() error
 }
+
+var (
+	ErrConnectionClosed = errors.New("mq: connection is closed")
+)
