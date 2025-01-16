@@ -1,242 +1,217 @@
 package mq
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"log"
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rabbitmq/amqp091-go"
 )
 
-type RabbitMQ struct {
-	conn         *amqp.Connection
-	channel      *amqp.Channel
-	serverQueue  string
-	replyQueue   string
-	pending      sync.Map
-	cancelFunc   context.CancelFunc
-	wg           sync.WaitGroup
-	connStr      string
-	retryCount   int
-	retryBackoff time.Duration
-	timeout      time.Duration
-
-	closed bool // new: track if closed
+type MessageRabbitMQ struct {
+	Data          string
+	ReplyTo       string
+	CorrelationID string
 }
 
-func NewRabbitMQ(
-	connStr, serverQueue string,
-	timeout time.Duration,
-	retryCount int,
-	retryBackoff time.Duration,
-) (*RabbitMQ, error) {
-	mq := &RabbitMQ{
-		connStr:      connStr,
-		serverQueue:  serverQueue,
+type ClientRabbitMQ struct {
+	conn         *amqp091.Connection
+	channel      *amqp091.Channel
+	replyQueue   string
+	corrMap      sync.Map
+	timeout      time.Duration
+	retryCount   int
+	retryBackoff time.Duration
+}
+
+type ServerRabbitMQ struct {
+	conn        *amqp091.Connection
+	channel     *amqp091.Channel
+	handler     func(string) string
+	handlerLock sync.Mutex
+}
+
+func NewClientRabbitMQ(url string, timeout time.Duration, retryCount int, retryBackoff time.Duration) (*ClientRabbitMQ, error) {
+	conn, err := amqp091.Dial(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to create channel: %w", err)
+	}
+
+	q, err := ch.QueueDeclare(
+		"",    // Name (auto-generated)
+		false, // Durable
+		true,  // Auto-delete
+		true,  // Exclusive
+		false, // No-wait
+		nil,   // Args
+	)
+	if err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, fmt.Errorf("failed to declare reply queue: %w", err)
+	}
+
+	client := &ClientRabbitMQ{
+		conn:         conn,
+		channel:      ch,
+		replyQueue:   q.Name,
 		timeout:      timeout,
 		retryCount:   retryCount,
 		retryBackoff: retryBackoff,
 	}
-	if err := mq.connect(); err != nil {
-		return nil, fmt.Errorf("failed to connect: %w", err)
-	}
-	if err := mq.setupReplyQueue(); err != nil {
-		_ = mq.Close()
-		return nil, fmt.Errorf("failed to setup reply queue: %w", err)
-	}
-	return mq, nil
+
+	go client.listenForReplies()
+
+	return client, nil
 }
 
-func (mq *RabbitMQ) connect() error {
-	conn, err := amqp.Dial(mq.connStr)
+func (c *ClientRabbitMQ) listenForReplies() {
+	deliveries, err := c.channel.Consume(
+		c.replyQueue,
+		"",
+		true,  // Auto-ack
+		true,  // Exclusive
+		false, // No local
+		false, // No-wait
+		nil,   // Args
+	)
 	if err != nil {
-		return err
+		fmt.Printf("Error starting reply consumer: %v\n", err)
+		return
 	}
-	ch, err := conn.Channel()
-	if err != nil {
-		_ = conn.Close()
-		return err
-	}
-	mq.conn = conn
-	mq.channel = ch
 
-	_, cancel := context.WithCancel(context.Background())
-	mq.cancelFunc = cancel
-
-	log.Println("[RabbitMQ] connected")
-	return nil
-}
-
-func (mq *RabbitMQ) setupReplyQueue() error {
-	name := fmt.Sprintf("rpc.reply.%d", rand.Int63())
-	q, err := mq.channel.QueueDeclare(name, false, true, true, false, nil)
-	if err != nil {
-		return err
-	}
-	mq.replyQueue = q.Name
-	deliveries, err := mq.channel.Consume(q.Name, "", true, true, false, false, nil)
-	if err != nil {
-		return err
-	}
-	mq.wg.Add(1)
-	go mq.handleReplies(deliveries)
-	return nil
-}
-
-func (mq *RabbitMQ) handleReplies(deliveries <-chan amqp.Delivery) {
-	defer mq.wg.Done()
 	for d := range deliveries {
-		corrID := d.CorrelationId
-		if corrID == "" {
-			continue
+		if ch, ok := c.corrMap.Load(d.CorrelationId); ok {
+			responseChan := ch.(chan string)
+			responseChan <- string(d.Body)
+			close(responseChan)
+			c.corrMap.Delete(d.CorrelationId)
 		}
-		val, ok := mq.pending.LoadAndDelete(corrID)
-		if !ok {
-			continue
-		}
-		ch := val.(chan Message)
-		ch <- Message{Data: string(d.Body)}
-		close(ch)
 	}
 }
 
-func (mq *RabbitMQ) Request(msg Message) (<-chan Message, error) {
-	// If we've already closed, fail immediately
-	if mq.closed {
-		return nil, ErrConnectionClosed
-	}
+func (c *ClientRabbitMQ) Request(msg string) (<-chan string, error) {
+	corrID := uuid.New().String()
 
-	if mq.channel == nil {
-		return nil, errors.New("channel is not open")
-	}
+	responseChan := make(chan string, 1)
+	c.corrMap.Store(corrID, responseChan)
 
-	corrID := uuid.NewString()
-	responseChan := make(chan Message, 1)
-	mq.pending.Store(corrID, responseChan)
-
-	if msg.ReplyTo == "" {
-		msg.ReplyTo = mq.replyQueue
-	}
-
-	pub := func() error {
-		return mq.channel.PublishWithContext(
-			context.Background(),
-			"",
-			mq.serverQueue,
-			false,
-			false,
-			amqp.Publishing{
-				ContentType:   "text/plain",
-				CorrelationId: corrID,
-				ReplyTo:       msg.ReplyTo,
-				Body:          []byte(msg.Data),
-			},
-		)
-	}
-	var err error
-	for i := 0; i < mq.retryCount; i++ {
-		if err = pub(); err == nil {
-			break
-		}
-		log.Printf("[RabbitMQ] publish fail (attempt %d): %v", i+1, err)
-		time.Sleep(mq.retryBackoff)
-	}
+	err := c.channel.Publish(
+		"",          // Exchange
+		"rpc_queue", // Routing key
+		false,
+		false,
+		amqp091.Publishing{
+			ContentType:   "text/plain",
+			Body:          []byte(msg),
+			ReplyTo:       c.replyQueue,
+			CorrelationId: corrID,
+		},
+	)
 	if err != nil {
-		mq.pending.Delete(corrID)
-		close(responseChan)
-		return nil, err
+		c.corrMap.Delete(corrID)
+		return nil, fmt.Errorf("failed to publish message: %w", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), mq.timeout)
-	go func(id string) {
-		<-ctx.Done()
-		if _, loaded := mq.pending.LoadAndDelete(id); loaded {
-			close(responseChan)
-		}
-		cancel()
-	}(corrID)
 
 	return responseChan, nil
 }
 
-func (mq *RabbitMQ) RegisterHandler(handler func(Message) Message) error {
-	if mq.channel == nil {
-		return errors.New("channel is not open")
+func (c *ClientRabbitMQ) Close() error {
+	if err := c.channel.Close(); err != nil {
+		return err
 	}
-	_, err := mq.channel.QueueDeclare(mq.serverQueue, true, false, false, false, nil)
+	return c.conn.Close()
+}
+
+func NewServerRabbitMQ(url string) (*ServerRabbitMQ, error) {
+	conn, err := amqp091.Dial(url)
 	if err != nil {
-		return fmt.Errorf("queue declare: %w", err)
+		return nil, err
 	}
-	deliveries, err := mq.channel.Consume(mq.serverQueue, "", true, false, false, false, nil)
+
+	ch, err := conn.Channel()
 	if err != nil {
-		return fmt.Errorf("consume: %w", err)
+		conn.Close()
+		return nil, err
 	}
-	mq.wg.Add(1)
-	go mq.handleRequests(deliveries, handler)
+
+	_, err = ch.QueueDeclare(
+		"rpc_queue", // Name
+		false,       // Durable
+		false,       // Delete when unused
+		false,       // Exclusive
+		false,       // No-wait
+		nil,         // Args
+	)
+	if err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, err
+	}
+
+	return &ServerRabbitMQ{
+		conn:    conn,
+		channel: ch,
+	}, nil
+}
+
+func (s *ServerRabbitMQ) ServeHandler(handler func(string) string) error {
+	s.handlerLock.Lock()
+	defer s.handlerLock.Unlock()
+
+	if s.handler != nil {
+		// Clean up previous handler if it exists
+		s.handler = nil
+	}
+
+	deliveries, err := s.channel.Consume(
+		"rpc_queue",
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to start consuming: %w", err)
+	}
+
+	s.handler = handler
+
+	go func() {
+		for d := range deliveries {
+			response := s.handler(string(d.Body))
+			err := s.channel.Publish(
+				"",
+				d.ReplyTo,
+				false,
+				false,
+				amqp091.Publishing{
+					ContentType:   "text/plain",
+					Body:          []byte(response),
+					CorrelationId: d.CorrelationId,
+				},
+			)
+			if err != nil {
+				fmt.Printf("failed to send response: %v\n", err)
+			}
+		}
+	}()
+
 	return nil
 }
 
-func (mq *RabbitMQ) handleRequests(deliveries <-chan amqp.Delivery, handler func(Message) Message) {
-	defer mq.wg.Done()
-	for d := range deliveries {
-		if d.ReplyTo == "" || d.CorrelationId == "" {
-			continue
-		}
-		req := Message{Data: string(d.Body), ReplyTo: d.ReplyTo}
-		resp := handler(req)
-		mq.publishResponse(resp, d.CorrelationId, d.ReplyTo)
+func (s *ServerRabbitMQ) Close() error {
+	if err := s.channel.Close(); err != nil {
+		return err
 	}
-}
-
-func (mq *RabbitMQ) publishResponse(resp Message, corrID, queue string) {
-	for i := 0; i < mq.retryCount; i++ {
-		err := mq.channel.PublishWithContext(
-			context.Background(),
-			"",
-			queue,
-			false,
-			false,
-			amqp.Publishing{
-				ContentType:   "text/plain",
-				CorrelationId: corrID,
-				Body:          []byte(resp.Data),
-			},
-		)
-		if err == nil {
-			return
-		}
-		log.Printf("[RabbitMQ] response publish fail (attempt %d): %v", i+1, err)
-		time.Sleep(mq.retryBackoff)
-	}
-}
-
-func (mq *RabbitMQ) Close() error {
-	mq.closed = true
-	mq.cancelFunc()
-
-	var errs []error
-
-	if mq.channel != nil {
-		if err := mq.channel.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	mq.wg.Wait()
-
-	if mq.conn != nil {
-		if err := mq.conn.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("close errors: %v", errs)
-	}
-	return nil
+	return s.conn.Close()
 }

@@ -26,4 +26,5 @@
 ```
 2. Added a simple message queue pub/sub interface with stub implementation based on channels with test
 3. Added message queue using RabbitMQ and unified test cases for both implementations
-4. Changed message queue pattern from pub/sub to req/rep to get rpc-like api
+4. Changed message queue pattern from pub/sub to req/rep to get rpc-like api.
+5. Split server and client interfaces and changed approach from direct Reply-to to correlation id

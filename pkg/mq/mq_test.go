@@ -2,7 +2,6 @@ package mq
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"testing"
 	"time"
@@ -10,92 +9,132 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func runMessageQueueTests(t *testing.T, mq MessageQueue) {
-	t.Run("RegisterHandler", func(t *testing.T) {
-		err := mq.RegisterHandler(func(m Message) Message {
-			return Message{Data: "echo:" + m.Data}
+func runUnifiedTests(t *testing.T, clientFactory func() ClientMQ, serverFactory func() ServerMQ) {
+	t.Run("Single Request-Reply", func(t *testing.T) {
+		server := serverFactory()
+		defer server.Close()
+
+		err := server.ServeHandler(func(msg string) string {
+			return "Reply: " + msg
 		})
-		assert.NoError(t, err, "failed to register handler")
+		assert.NoError(t, err)
+
+		client := clientFactory()
+		defer client.Close()
+
+		replyChan, err := client.Request("Test Message")
+		assert.NoError(t, err)
+
+		select {
+		case reply := <-replyChan:
+			assert.Equal(t, "Reply: Test Message", reply)
+		case <-time.After(1 * time.Second):
+			t.Error("Timed out waiting for reply")
+		}
 	})
 
-	t.Run("SingleRequestResponse", func(t *testing.T) {
-		req := Message{Data: "test-1"}
-		respCh, err := mq.Request(req)
-		assert.NoError(t, err, "failed to send request")
-		resp := <-respCh
-		assert.Equal(t, "echo:test-1", resp.Data, "unexpected response")
-	})
+	t.Run("Concurrent Requests", func(t *testing.T) {
+		server := serverFactory()
+		defer server.Close()
 
-	t.Run("ConcurrentRequests", func(t *testing.T) {
-		const concurrency = 5
+		err := server.ServeHandler(func(msg string) string {
+			return fmt.Sprintf("Processed: %s", msg)
+		})
+		assert.NoError(t, err)
+
+		client := clientFactory()
+		defer client.Close()
+
 		var wg sync.WaitGroup
-		wg.Add(concurrency)
-
-		results := make([]string, concurrency)
-
-		for i := 0; i < concurrency; i++ {
-			go func(idx int) {
+		const concurrentRequests = 10
+		for i := 0; i < concurrentRequests; i++ {
+			wg.Add(1)
+			go func(i int) {
 				defer wg.Done()
-
-				reqMsg := Message{Data: fmt.Sprintf("batch-%d", idx)}
-				respCh, err := mq.Request(reqMsg)
-				if err != nil {
-					t.Errorf("Request error for idx=%d: %v", idx, err)
-					return
-				}
+				message := fmt.Sprintf("Message %d", i)
+				replyChan, err := client.Request(message)
+				assert.NoError(t, err)
 
 				select {
-				case resp, ok := <-respCh:
-					if !ok {
-						t.Errorf("Response channel closed unexpectedly for idx %d", idx)
-						return
-					}
-					results[idx] = resp.Data
-				case <-time.After(3 * time.Second):
-					t.Errorf("Timed out waiting for response at idx %d", idx)
+				case reply := <-replyChan:
+					expected := fmt.Sprintf("Processed: %s", message)
+					assert.Equal(t, expected, reply)
+				case <-time.After(1 * time.Second):
+					t.Errorf("Timed out waiting for reply to %s", message)
 				}
 			}(i)
 		}
 		wg.Wait()
+	})
 
-		for i, r := range results {
-			expected := fmt.Sprintf("echo:batch-%d", i)
-			assert.Equal(t, expected, r, "unexpected concurrent response for idx=%d", i)
+	t.Run("Multiple Clients", func(t *testing.T) {
+		server := serverFactory()
+		defer server.Close()
+
+		err := server.ServeHandler(func(msg string) string {
+			return "Reply: " + msg
+		})
+		assert.NoError(t, err)
+
+		const clientCount = 5
+		clients := make([]ClientMQ, clientCount)
+		for i := 0; i < clientCount; i++ {
+			clients[i] = clientFactory()
+			defer clients[i].Close()
 		}
+
+		var wg sync.WaitGroup
+		for i, client := range clients {
+			wg.Add(1)
+			go func(clientID int, client ClientMQ) {
+				defer wg.Done()
+				message := fmt.Sprintf("Client %d Message", clientID)
+				replyChan, err := client.Request(message)
+				assert.NoError(t, err)
+
+				select {
+				case reply := <-replyChan:
+					expected := "Reply: " + message
+					assert.Equal(t, expected, reply)
+				case <-time.After(1 * time.Second):
+					t.Errorf("Timed out waiting for reply from Client %d", clientID)
+				}
+			}(i, client)
+		}
+		wg.Wait()
 	})
-
-	t.Run("CloseAndSend", func(t *testing.T) {
-		err := mq.Close()
-		assert.NoError(t, err, "failed to close MQ")
-
-		respCh, err2 := mq.Request(Message{Data: "should-fail"})
-		assert.Nil(t, respCh, "channel should be nil after close")
-		assert.ErrorIs(t, err2, ErrConnectionClosed)
-	})
-}
-
-func TestStubMQ(t *testing.T) {
-	stub := NewMessageQueueStub(10)
-	runMessageQueueTests(t, stub)
 }
 
 func TestRabbitMQ(t *testing.T) {
-	rmq, err := NewRabbitMQ(
-		"amqp://guest:guest@localhost:5672/",
-		"mq_test_server",
-		5*time.Second,        // request timeout
-		3,                    // publish retries
-		500*time.Millisecond, // backoff
-	)
-	assert.NoError(t, err, "failed to init RabbitMQ")
-	if err != nil {
-		t.Skip("Skipping RabbitMQ test; cannot connect.")
-	}
-	defer func() {
-		if cerr := rmq.Close(); cerr != nil {
-			log.Printf("failed to close RabbitMQ: %v", cerr)
+	clientFactory := func() ClientMQ {
+		client, err := NewClientRabbitMQ("amqp://guest:guest@localhost", 5*time.Second, 3, 1*time.Second)
+		if err != nil {
+			t.Fatalf("Failed to initialize RabbitMQ client: %v", err)
 		}
-	}()
+		return client
+	}
 
-	runMessageQueueTests(t, rmq)
+	serverFactory := func() ServerMQ {
+		server, err := NewServerRabbitMQ("amqp://guest:guest@localhost")
+		if err != nil {
+			t.Fatalf("Failed to initialize RabbitMQ server: %v", err)
+		}
+		return server
+	}
+
+	runUnifiedTests(t, clientFactory, serverFactory)
+}
+
+func TestInprocMQ(t *testing.T) {
+	inproc := NewInprocMQ()
+
+	clientFactory := func() ClientMQ {
+		return inproc
+	}
+
+	serverFactory := func() ServerMQ {
+		return inproc
+	}
+
+	runUnifiedTests(t, clientFactory, serverFactory)
 }

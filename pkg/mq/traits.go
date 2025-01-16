@@ -4,14 +4,13 @@ import (
 	"errors"
 )
 
-type Message struct {
-	Data    string
-	ReplyTo string
+type ClientMQ interface {
+	Request(msg string) (<-chan string, error)
+	Close() error
 }
 
-type MessageQueue interface {
-	Request(msg Message) (<-chan Message, error)
-	RegisterHandler(handler func(Message) Message) error
+type ServerMQ interface {
+	ServeHandler(handler func(string) string) error
 	Close() error
 }
 
