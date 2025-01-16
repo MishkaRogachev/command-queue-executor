@@ -1,0 +1,16 @@
+{"type":"addItem","payload":{"key":"testKey1","value":"testValue1"}}
+{"type":"addItem","payload":{"key":"testKey2","value":"testValue2"}}
+{"type":"addItem","payload":{"key":"testKey3","value":"testValue3"}}
+{"type":"deleteItem","payload":{"key":"testKey1"}}
+{"type":"getItem","payload":{"key":"testKey2"}}
+{"type":"addItem","payload":{"key":"testKey4","value":"testValue4"}}
+{"type":"getItem","payload":{"key":"testKey3"}}
+{"type":"addItem","payload":{"key":"testKey5","value":"testValue5"}}
+{"type":"deleteItem","payload":{"key":"testKey4"}}
+{"type":"getItem","payload":{"key":"testKey5"}}
+{"type":"getAllItems","payload":{}}
+{"type":"addItem","payload":{"key":"testKey6","value":"testValue6"}}
+{"type":"addItem","payload":{"key":"testKey7","value":"testValue7"}}
+{"type":"deleteItem","payload":{"key":"testKey7"}}
+{"type":"getAllItems","payload":{}}
+{"type":"getItem","payload":{"key":"testKey6"}}
