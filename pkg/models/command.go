@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// Command Types
 type CommandType string
 
 const (
@@ -14,12 +15,15 @@ const (
 	GetAll     CommandType = "getAllItems"
 )
 
+// CommandWrapper encapsulates all commands.
 type CommandWrapper struct {
 	Type    CommandType     `json:"type"`
 	Payload json.RawMessage `json:"payload"`
 }
 
-// AddItem Command
+// Request and Response Models
+
+// AddItem
 type AddItemRequest struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -30,7 +34,7 @@ type AddItemResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-// DeleteItem Command
+// DeleteItem
 type DeleteItemRequest struct {
 	Key string `json:"key"`
 }
@@ -40,7 +44,7 @@ type DeleteItemResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-// GetItem Command
+// GetItem
 type GetItemRequest struct {
 	Key string `json:"key"`
 }
@@ -51,7 +55,7 @@ type GetItemResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-// GetAllItems Command
+// GetAllItems
 type GetAllItemsRequest struct{}
 
 type GetAllItemsResponse struct {
@@ -65,36 +69,35 @@ type KeyValuePair struct {
 	Value string `json:"value"`
 }
 
-func Serialize(commandType CommandType, data any) (string, error) {
-	payload, err := json.Marshal(data)
+func SerializeCommand(commandType CommandType, payload interface{}) (string, error) {
+	payloadData, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize payload: %w", err)
 	}
 
-	wrapper := CommandWrapper{
+	command := CommandWrapper{
 		Type:    commandType,
-		Payload: payload,
+		Payload: payloadData,
 	}
 
-	raw, err := json.Marshal(wrapper)
+	commandData, err := json.Marshal(command)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize command wrapper: %w", err)
 	}
 
-	return string(raw), nil
+	return string(commandData), nil
 }
 
-func DeserializeWrapper(raw string) (CommandWrapper, error) {
+func DeserializeCommandWrapper(raw string) (CommandWrapper, error) {
 	var wrapper CommandWrapper
 	if err := json.Unmarshal([]byte(raw), &wrapper); err != nil {
 		return CommandWrapper{}, fmt.Errorf("failed to deserialize command wrapper: %w", err)
 	}
-
 	return wrapper, nil
 }
 
-func Deserialize(raw string, target any) (CommandType, error) {
-	wrapper, err := DeserializeWrapper(raw)
+func DeserializeCommand(raw string, target interface{}) (CommandType, error) {
+	wrapper, err := DeserializeCommandWrapper(raw)
 	if err != nil {
 		return "", err
 	}
@@ -104,4 +107,19 @@ func Deserialize(raw string, target any) (CommandType, error) {
 	}
 
 	return wrapper.Type, nil
+}
+
+func SerializeResponse(response interface{}) (string, error) {
+	responseData, err := json.Marshal(response)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize response: %w", err)
+	}
+	return string(responseData), nil
+}
+
+func DeserializeResponse(raw string, target interface{}) error {
+	if err := json.Unmarshal([]byte(raw), target); err != nil {
+		return fmt.Errorf("failed to deserialize response: %w", err)
+	}
+	return nil
 }

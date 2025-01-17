@@ -12,7 +12,7 @@ import (
 )
 
 func mockServerHandler(msg string) string {
-	cmd, err := models.DeserializeWrapper(msg)
+	cmd, err := models.DeserializeCommandWrapper(msg)
 	fmt.Println(">> Received command:", msg)
 	if err != nil {
 		return `{"success": false, "message": "failed to parse command"}`

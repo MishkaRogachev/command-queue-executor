@@ -14,7 +14,7 @@ import (
 
 type ResponseHandlerFunc func(string) error
 
-// Producer responsible for sending commands to the message queue from a file
+// Producer responsible for sending request to the message queue from a file and promoting responses to a handler
 type Producer struct {
 	client  mq.ClientMQ
 	handler ResponseHandlerFunc

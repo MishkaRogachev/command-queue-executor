@@ -6,15 +6,18 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
+type RequestHandlerFunc func(string) string
+
+// Consumer responsible for consuming requests from the message queue and promoting them to a handler
 type Consumer struct {
 	server      mq.ServerMQ
-	handler     func(string) string
+	handler     RequestHandlerFunc
 	workerCount int
 	stopChan    chan struct{}
 	wg          sync.WaitGroup
 }
 
-func NewConsumer(server mq.ServerMQ, workerCount int, handler func(string) string) *Consumer {
+func NewConsumer(server mq.ServerMQ, workerCount int, handler RequestHandlerFunc) *Consumer {
 	return &Consumer{
 		server:      server,
 		handler:     handler,
@@ -24,7 +27,7 @@ func NewConsumer(server mq.ServerMQ, workerCount int, handler func(string) strin
 }
 
 func (c *Consumer) Start() error {
-	err := c.server.ServeHandler(c.processMessage)
+	err := c.server.ServeHandler(c.handler)
 	if err != nil {
 		return err
 	}
@@ -47,8 +50,4 @@ func (c *Consumer) worker() {
 	defer c.wg.Done()
 
 	<-c.stopChan
-}
-
-func (c *Consumer) processMessage(msg string) string {
-	return c.handler(msg)
 }
