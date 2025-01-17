@@ -30,7 +30,6 @@ func loadConfig() Config {
 func main() {
 	config := loadConfig()
 
-	// Initialize the RabbitMQ client
 	client, err := mq.NewClientRabbitMQ(
 		config.RabbitMQURL,
 		config.Timeout,
@@ -46,10 +45,9 @@ func main() {
 		}
 	}()
 
-	// Create a new producer
-	prod := producer.NewProducer(client)
+	// NOTE: using the same timeout for response await
+	prod := producer.NewProducer(client, config.Timeout)
 
-	// Read and process commands from the file specified in the config
 	err = prod.ReadCommandsFromFile(config.CommandFile)
 	if err != nil {
 		log.Fatalf("Failed to process commands: %v", err)

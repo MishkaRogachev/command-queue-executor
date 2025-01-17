@@ -6,18 +6,21 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/MishkaRogachev/command-queue-executor/pkg/models"
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
 type Producer struct {
-	client mq.ClientMQ
+	client  mq.ClientMQ
+	timeout time.Duration
 }
 
-func NewProducer(client mq.ClientMQ) *Producer {
+func NewProducer(client mq.ClientMQ, timeout time.Duration) *Producer {
 	return &Producer{
-		client: client,
+		client:  client,
+		timeout: timeout,
 	}
 }
 
@@ -49,6 +52,7 @@ func (p *Producer) ReadCommandsFromFile(filePath string) error {
 				return
 			}
 
+			fmt.Println("Sending command:", string(rawCommand))
 			responseChan, err := p.client.Request(string(rawCommand))
 			if err != nil {
 				fmt.Printf("Error sending command: %v\n", err)
@@ -58,7 +62,7 @@ func (p *Producer) ReadCommandsFromFile(filePath string) error {
 			select {
 			case response := <-responseChan:
 				fmt.Printf("Received response: %s\n", response)
-			default:
+			case <-time.After(p.timeout):
 				fmt.Println("No response received in time")
 			}
 		}(cmd)

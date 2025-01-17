@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/MishkaRogachev/command-queue-executor/pkg/models"
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
@@ -12,15 +13,15 @@ import (
 
 func TestProducerWithInprocMQ(t *testing.T) {
 	inprocMQ := mq.NewInprocMQ()
-	producer := NewProducer(inprocMQ)
+	producer := NewProducer(inprocMQ, 1*time.Second)
 
 	// Set up a mock response handler to simulate a server
 	inprocMQ.ServeHandler((func(msg string) string {
 		cmd, err := models.DeserializeWrapper(msg)
+		fmt.Println("Received command:", msg)
 		if err != nil {
 			return `{"success": false, "message": "failed to parse command"}`
 		}
-		fmt.Println("Received command:", cmd.Type)
 
 		switch cmd.Type {
 		case models.AddItem:
