@@ -23,7 +23,7 @@ func loadConfig() Config {
 		Timeout:      5 * time.Second,
 		RetryCount:   3,
 		RetryBackoff: 1 * time.Second,
-		CommandFile:  "commands.json",
+		CommandFile:  "test_data/test_commands_long.txt",
 	}
 }
 
@@ -45,13 +45,18 @@ func main() {
 		}
 	}()
 
+	responseHandlerDebug := func(response string) error {
+		log.Printf("<< Received response: %s\n", response)
+		return nil
+	}
+
 	// NOTE: using the same timeout for response await
-	prod := producer.NewProducer(client, config.Timeout)
+	prod := producer.NewProducer(client, responseHandlerDebug, config.Timeout)
 
 	err = prod.ReadCommandsFromFile(config.CommandFile)
 	if err != nil {
 		log.Fatalf("Failed to process commands: %v", err)
 	}
 
-	log.Println("All commands processed successfully!")
+	log.Println("Done!")
 }

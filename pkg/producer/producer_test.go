@@ -13,7 +13,7 @@ import (
 
 func mockServerHandler(msg string) string {
 	cmd, err := models.DeserializeWrapper(msg)
-	fmt.Println("Received command:", msg)
+	fmt.Println(">> Received command:", msg)
 	if err != nil {
 		return `{"success": false, "message": "failed to parse command"}`
 	}
@@ -32,10 +32,22 @@ func mockServerHandler(msg string) string {
 	}
 }
 
+func runProducerTestWithFile(t *testing.T, producer *Producer, fileName string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	err := producer.ReadCommandsFromFile(fileName)
+	assert.NoError(t, err)
+}
+
+func responseHandlerDebug(response string) error {
+	fmt.Printf("<< Received response: %s\n", response)
+	return nil
+}
+
 func TestProducerWithInprocMQ(t *testing.T) {
 	inprocMQ := mq.NewInprocMQ()
 
-	producer := NewProducer(inprocMQ, 1*time.Second)
+	producer := NewProducer(inprocMQ, responseHandlerDebug, 1*time.Second)
 
 	inprocMQ.ServeHandler(mockServerHandler)
 
@@ -49,18 +61,11 @@ func TestProducerWithInprocMQ(t *testing.T) {
 	wg.Wait()
 }
 
-func runProducerTestWithFile(t *testing.T, producer *Producer, fileName string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	err := producer.ReadCommandsFromFile(fileName)
-	assert.NoError(t, err)
-}
-
 func TestConcurrentProducersWithInprocMQ(t *testing.T) {
 	inprocMQ := mq.NewInprocMQ()
 
-	producer1 := NewProducer(inprocMQ, 1*time.Second)
-	producer2 := NewProducer(inprocMQ, 1*time.Second)
+	producer1 := NewProducer(inprocMQ, responseHandlerDebug, 1*time.Second)
+	producer2 := NewProducer(inprocMQ, responseHandlerDebug, 1*time.Second)
 
 	inprocMQ.ServeHandler(mockServerHandler)
 

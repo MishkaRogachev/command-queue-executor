@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func runUnifiedTests(t *testing.T, clientFactory func() ClientMQ, serverFactory func() ServerMQ) {
+func runMessageQueueTests(t *testing.T, clientFactory func() ClientMQ, serverFactory func() ServerMQ) {
 	t.Run("Single Request-Reply", func(t *testing.T) {
 		server := serverFactory()
 		defer server.Close()
@@ -122,7 +122,7 @@ func TestRabbitMQ(t *testing.T) {
 		return server
 	}
 
-	runUnifiedTests(t, clientFactory, serverFactory)
+	runMessageQueueTests(t, clientFactory, serverFactory)
 }
 
 func TestInprocMQ(t *testing.T) {
@@ -136,5 +136,5 @@ func TestInprocMQ(t *testing.T) {
 		return inproc
 	}
 
-	runUnifiedTests(t, clientFactory, serverFactory)
+	runMessageQueueTests(t, clientFactory, serverFactory)
 }

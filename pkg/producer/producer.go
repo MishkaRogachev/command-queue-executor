@@ -12,14 +12,19 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
+type ResponseHandlerFunc func(string) error
+
+// Producer responsible for sending commands to the message queue from a file
 type Producer struct {
 	client  mq.ClientMQ
+	handler ResponseHandlerFunc
 	timeout time.Duration
 }
 
-func NewProducer(client mq.ClientMQ, timeout time.Duration) *Producer {
+func NewProducer(client mq.ClientMQ, handler ResponseHandlerFunc, timeout time.Duration) *Producer {
 	return &Producer{
 		client:  client,
+		handler: handler,
 		timeout: timeout,
 	}
 }
@@ -34,15 +39,19 @@ func (p *Producer) ReadCommandsFromFile(filePath string) error {
 	var wg sync.WaitGroup
 	scanner := bufio.NewScanner(file)
 
+	lineCount := 0
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineCount++
 
 		var cmd models.CommandWrapper
 		if err := json.Unmarshal([]byte(line), &cmd); err != nil {
-			return fmt.Errorf("failed to parse command: %w", err)
+			fmt.Printf("Failed to parse command: %v, skipping line %d", err, lineCount)
+			continue
 		}
 
 		wg.Add(1)
+		// Start a routine to send the command and await the response
 		go func(command models.CommandWrapper) {
 			defer wg.Done()
 
@@ -52,7 +61,6 @@ func (p *Producer) ReadCommandsFromFile(filePath string) error {
 				return
 			}
 
-			fmt.Println("Sending command:", string(rawCommand))
 			responseChan, err := p.client.Request(string(rawCommand))
 			if err != nil {
 				fmt.Printf("Error sending command: %v\n", err)
@@ -61,7 +69,7 @@ func (p *Producer) ReadCommandsFromFile(filePath string) error {
 
 			select {
 			case response := <-responseChan:
-				fmt.Printf("Received response: %s\n", response)
+				p.handler(response)
 			case <-time.After(p.timeout):
 				fmt.Println("No response received in time")
 			}
