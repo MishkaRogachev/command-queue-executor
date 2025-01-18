@@ -13,8 +13,12 @@ type RequestHandlerOrderedMap struct {
 }
 
 func NewRequestHandlerOrderedMap() *RequestHandlerOrderedMap {
+	omap, err := ordered_map.New[string, string]()
+	if err != nil {
+		log.Fatalf("Failed to create ordered map: %v", err)
+	}
 	return &RequestHandlerOrderedMap{
-		omap: ordered_map.New[string, string](),
+		omap: omap,
 	}
 }
 

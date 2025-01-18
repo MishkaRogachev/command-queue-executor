@@ -2,6 +2,7 @@ package ordered_map
 
 import (
 	"errors"
+	"sync"
 )
 
 var (
@@ -36,21 +37,23 @@ func WithInitialData[K comparable, V any](initialData ...Pair[K, V]) InitOption[
 	}
 }
 
-// TODO: current implementation is very naive & slow, change to trie-based after server-client hook up
 type OrderedMap[K comparable, V any] struct {
-	items map[K]V
-	order []K
+	mu       sync.RWMutex
+	items    map[K]V
+	order    []K
+	indexMap map[K]int // Tracks the position of each key in the 'order' slice
 }
 
-func New[K comparable, V any](options ...any) *OrderedMap[K, V] {
-	orderedMap := &OrderedMap[K, V]{}
-
+func New[K comparable, V any](options ...any) (*OrderedMap[K, V], error) {
 	var config initConfig[K, V]
+
 	for _, untypedOption := range options {
 		switch option := untypedOption.(type) {
 		case int:
+			// If there's more than 1 option, returning an error
+			// because we can't parse anything else after an int.
 			if len(options) != 1 {
-				panic(ErrInvalidOption)
+				return nil, ErrInvalidOption
 			}
 			config.capacity = option
 
@@ -58,70 +61,98 @@ func New[K comparable, V any](options ...any) *OrderedMap[K, V] {
 			option(&config)
 
 		default:
-			panic(ErrInvalidOption)
+			return nil, ErrInvalidOption
 		}
 	}
 
-	orderedMap.initialize(config.capacity)
-	orderedMap.StorePairs(config.initialData...)
+	if config.capacity < 0 {
+		config.capacity = 0
+	}
 
-	return orderedMap
+	om := &OrderedMap[K, V]{}
+	om.initialize(config.capacity)
+	om.StorePairs(config.initialData...)
+
+	return om, nil
 }
 
 func (om *OrderedMap[K, V]) initialize(capacity int) {
 	om.items = make(map[K]V, capacity)
 	om.order = make([]K, 0, capacity)
+	om.indexMap = make(map[K]int, capacity)
 }
 
 func (om *OrderedMap[K, V]) Store(key K, value V) {
+	om.mu.Lock()
+	defer om.mu.Unlock()
+
 	if _, exists := om.items[key]; !exists {
+		// New key: insert it into the end of the order slice
 		om.order = append(om.order, key)
+		om.indexMap[key] = len(om.order) - 1
 	}
 	om.items[key] = value
 }
 
 func (om *OrderedMap[K, V]) StorePairs(pairs ...Pair[K, V]) {
+	om.mu.Lock()
+	defer om.mu.Unlock()
+
 	for _, pair := range pairs {
-		om.Store(pair.Key, pair.Value)
+		if _, exists := om.items[pair.Key]; !exists {
+			om.order = append(om.order, pair.Key)
+			om.indexMap[pair.Key] = len(om.order) - 1
+		}
+		om.items[pair.Key] = pair.Value
 	}
 }
 
 func (om *OrderedMap[K, V]) Delete(key K) error {
+	om.mu.Lock()
+	defer om.mu.Unlock()
+
 	if _, exists := om.items[key]; !exists {
 		return ErrKeyNotFound
 	}
 	delete(om.items, key)
 
-	for i, k := range om.order {
-		if k == key {
-			om.order = append(om.order[:i], om.order[i+1:]...)
-			break
-		}
+	// Swap-and-pop removal from the order slice
+	index := om.indexMap[key]
+	lastIndex := len(om.order) - 1
+	if index != lastIndex {
+		// Move the last key into the deleted key's position
+		lastKey := om.order[lastIndex]
+		om.order[index] = lastKey
+		om.indexMap[lastKey] = index
 	}
+	om.order = om.order[:lastIndex]
+	delete(om.indexMap, key)
+
 	return nil
 }
 
 func (om *OrderedMap[K, V]) Get(key K) (V, error) {
-	if value, exists := om.items[key]; exists {
-		return value, nil
+	om.mu.RLock()
+	defer om.mu.RUnlock()
+
+	val, exists := om.items[key]
+	if !exists {
+		var zero V
+		return zero, ErrKeyNotFound
 	}
-	var zero V
-	return zero, ErrKeyNotFound
+	return val, nil
 }
 
-func (om *OrderedMap[K, V]) GetAll() []struct {
-	Key   K
-	Value V
-} {
-	result := make([]struct {
-		Key   K
-		Value V
-	}, 0, len(om.order))
+func (om *OrderedMap[K, V]) GetAll() []Pair[K, V] {
+	om.mu.RLock()
+	defer om.mu.RUnlock()
+
+	result := make([]Pair[K, V], 0, len(om.order))
 	for _, key := range om.order {
-		result = append(result, struct {
-			Key   K
-			Value V
-		}{Key: key, Value: om.items[key]})
+		result = append(result, Pair[K, V]{
+			Key:   key,
+			Value: om.items[key],
+		})
 	}
 	return result
 }

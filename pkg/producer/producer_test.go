@@ -1,6 +1,7 @@
 package producer
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -12,23 +13,85 @@ import (
 )
 
 func mockServerHandler(msg string) string {
-	cmd, err := models.DeserializeCommandWrapper(msg)
-	fmt.Println(">> Received command:", msg)
+	cmdWrapper, err := models.DeserializeCommandWrapper(msg)
+	fmt.Println(">> Request:", msg)
 	if err != nil {
-		return `{"success": false, "message": "failed to parse command"}`
+		response, _ := models.SerializeResponse(models.AddItemResponse{
+			Success: false,
+			Message: "failed to parse command",
+		})
+		return response
 	}
 
-	switch cmd.Type {
+	switch cmdWrapper.Type {
 	case models.AddItem:
-		return `{"success": true, "message": "item added"}`
+		var request models.AddItemRequest
+		if err := json.Unmarshal(cmdWrapper.Payload, &request); err != nil {
+			response, _ := models.SerializeResponse(models.AddItemResponse{
+				Success: false,
+				Message: "invalid addItem payload",
+			})
+			return response
+		}
+		response, _ := models.SerializeResponse(models.AddItemResponse{
+			Success: true,
+			Message: "item added",
+		})
+		return response
+
 	case models.DeleteItem:
-		return `{"success": true, "message": "item deleted"}`
+		var request models.DeleteItemRequest
+		if err := json.Unmarshal(cmdWrapper.Payload, &request); err != nil {
+			response, _ := models.SerializeResponse(models.DeleteItemResponse{
+				Success: false,
+				Message: "invalid deleteItem payload",
+			})
+			return response
+		}
+		response, _ := models.SerializeResponse(models.DeleteItemResponse{
+			Success: true,
+			Message: "item deleted",
+		})
+		return response
+
 	case models.GetItem:
-		return `{"success": true, "value": "testValue1"}`
+		var request models.GetItemRequest
+		if err := json.Unmarshal(cmdWrapper.Payload, &request); err != nil {
+			response, _ := models.SerializeResponse(models.GetItemResponse{
+				Success: false,
+				Message: "invalid getItem payload",
+			})
+			return response
+		}
+		response, _ := models.SerializeResponse(models.GetItemResponse{
+			Success: true,
+			Value:   "testValue1",
+		})
+		return response
+
 	case models.GetAll:
-		return `{"success": true, "items": [{"key": "testKey1", "value": "testValue1"}]}`
+		var request models.GetAllItemsRequest
+		if err := json.Unmarshal(cmdWrapper.Payload, &request); err != nil {
+			response, _ := models.SerializeResponse(models.GetAllItemsResponse{
+				Success: false,
+				Message: "invalid getAllItems payload",
+			})
+			return response
+		}
+		response, _ := models.SerializeResponse(models.GetAllItemsResponse{
+			Success: true,
+			Items: []models.KeyValuePair{
+				{Key: "testKey1", Value: "testValue1"},
+			},
+		})
+		return response
+
 	default:
-		return `{"success": false, "message": "unknown command"}`
+		response, _ := models.SerializeResponse(models.AddItemResponse{
+			Success: false,
+			Message: "unknown command",
+		})
+		return response
 	}
 }
 
@@ -40,7 +103,7 @@ func runProducerTestWithFile(t *testing.T, producer *Producer, fileName string, 
 }
 
 func responseHandlerDebug(response string) error {
-	fmt.Printf("<< Received response: %s\n", response)
+	fmt.Printf("<< Response: %s\n", response)
 	return nil
 }
 

@@ -9,7 +9,8 @@ import (
 )
 
 func TestOrderedMapOperations(t *testing.T) {
-	om := New[string, string]()
+	om, err := New[string, string]()
+	assert.NoError(t, err)
 
 	// Test Store and Get
 	om.Store("key1", "value1")
@@ -43,34 +44,31 @@ func TestOrderedMapOperations(t *testing.T) {
 
 	// Test GetAll
 	all := om.GetAll()
-	expected := []struct {
-		Key   string
-		Value string
-	}{
-		{"key1", "newValue1"},
-		{"key3", "value3"},
+	expected := []Pair[string, string]{
+		{Key: "key1", Value: "newValue1"},
+		{Key: "key3", Value: "value3"},
 	}
 	assert.Equal(t, expected, all)
 
 	// Test WithInitialData
-	omWithData := New[string, string](WithInitialData(Pair[string, string]{"a", "1"}, Pair[string, string]{"b", "2"}))
+	omWithData, err := New[string, string](WithInitialData(Pair[string, string]{"a", "1"}, Pair[string, string]{"b", "2"}))
+	assert.NoError(t, err)
 	allWithData := omWithData.GetAll()
-	expectedWithData := []struct {
-		Key   string
-		Value string
-	}{
-		{"a", "1"},
-		{"b", "2"},
+	expectedWithData := []Pair[string, string]{
+		{Key: "a", Value: "1"},
+		{Key: "b", Value: "2"},
 	}
 	assert.Equal(t, expectedWithData, allWithData)
 
 	// Test WithCapacity
-	omWithCapacity := New[string, string](WithCapacity[string, string](10))
+	omWithCapacity, err := New[string, string](WithCapacity[string, string](10))
+	assert.NoError(t, err)
 	assert.Equal(t, 10, cap(omWithCapacity.order))
 }
 
 func BenchmarkOrderedMap(b *testing.B) {
-	om := New[int, int](WithCapacity[int, int](b.N))
+	om, err := New[int, int](WithCapacity[int, int](b.N))
+	assert.NoError(b, err)
 
 	b.Run("Store", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -96,7 +94,8 @@ func TestPerformanceOrderedMap(t *testing.T) {
 
 	for _, size := range sizes {
 		t.Run(fmt.Sprintf("Size_%d", size), func(t *testing.T) {
-			om := New[int, int](WithCapacity[int, int](size))
+			om, err := New[int, int](WithCapacity[int, int](size))
+			assert.NoError(t, err)
 
 			start := time.Now()
 			for i := 0; i < size; i++ {
