@@ -39,3 +39,4 @@
     Size: 100000, Store Duration: 15.396916ms, Get Duration: 4.278042ms, Delete Duration: 13.774958ms
 ```
 NOTE: Linear time indicates O(1) time for store, get, delete
+10. Added alternate random commands producer for more heavlily-loaded testing

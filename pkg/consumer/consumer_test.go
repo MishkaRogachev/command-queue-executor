@@ -14,6 +14,7 @@ import (
 func generateCommands(count int) []string {
 	commands := make([]string, count)
 	for i := 0; i < count; i++ {
+		// TODO: use models!
 		commands[i] = fmt.Sprintf(`{"type":"addItem","payload":{"key":"key%d","value":"value%d"}}`, i, i)
 	}
 	return commands

@@ -51,7 +51,7 @@ func main() {
 	}
 
 	// NOTE: using the same timeout for response await
-	prod := producer.NewProducer(client, responseHandlerDebug, config.Timeout)
+	prod := producer.NewFileProducer(client, responseHandlerDebug, config.Timeout)
 
 	err = prod.ReadCommandsFromFile(config.CommandFile)
 	if err != nil {
