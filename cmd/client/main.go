@@ -9,33 +9,24 @@ import (
 )
 
 type Config struct {
-	RabbitMQURL  string        `json:"rabbitmq_url"`
-	Timeout      time.Duration `json:"timeout"`
-	RetryCount   int           `json:"retry_count"`
-	RetryBackoff time.Duration `json:"retry_backoff"`
-	CommandFile  string        `json:"command_file"`
+	RabbitMQURL string        `json:"rabbitmq_url"`
+	Timeout     time.Duration `json:"timeout"`
+	CommandFile string        `json:"command_file"`
 }
 
 func loadConfig() Config {
 	// Hardcoding config values forn simplicity
 	return Config{
-		RabbitMQURL:  "amqp://guest:guest@localhost",
-		Timeout:      5 * time.Second,
-		RetryCount:   3,
-		RetryBackoff: 1 * time.Second,
-		CommandFile:  "test_data/test_commands_long.txt",
+		RabbitMQURL: "amqp://guest:guest@localhost",
+		Timeout:     5 * time.Second,
+		CommandFile: "test_data/test_commands_long.txt",
 	}
 }
 
 func main() {
 	config := loadConfig()
 
-	client, err := mq.NewClientRabbitMQ(
-		config.RabbitMQURL,
-		config.Timeout,
-		config.RetryCount,
-		config.RetryBackoff,
-	)
+	client, err := mq.NewClientRabbitMQ(config.RabbitMQURL)
 	if err != nil {
 		log.Fatalf("Failed to initialize RabbitMQ client: %v", err)
 	}

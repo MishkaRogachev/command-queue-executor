@@ -3,7 +3,6 @@ package mq
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
@@ -16,13 +15,10 @@ type MessageRabbitMQ struct {
 }
 
 type ClientRabbitMQ struct {
-	conn         *amqp091.Connection
-	channel      *amqp091.Channel
-	replyQueue   string
-	corrMap      sync.Map
-	timeout      time.Duration
-	retryCount   int
-	retryBackoff time.Duration
+	conn       *amqp091.Connection
+	channel    *amqp091.Channel
+	replyQueue string
+	corrMap    sync.Map
 }
 
 type ServerRabbitMQ struct {
@@ -32,7 +28,7 @@ type ServerRabbitMQ struct {
 	handlerLock sync.Mutex
 }
 
-func NewClientRabbitMQ(url string, timeout time.Duration, retryCount int, retryBackoff time.Duration) (*ClientRabbitMQ, error) {
+func NewClientRabbitMQ(url string) (*ClientRabbitMQ, error) {
 	conn, err := amqp091.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
@@ -59,12 +55,9 @@ func NewClientRabbitMQ(url string, timeout time.Duration, retryCount int, retryB
 	}
 
 	client := &ClientRabbitMQ{
-		conn:         conn,
-		channel:      ch,
-		replyQueue:   q.Name,
-		timeout:      timeout,
-		retryCount:   retryCount,
-		retryBackoff: retryBackoff,
+		conn:       conn,
+		channel:    ch,
+		replyQueue: q.Name,
 	}
 
 	go client.listenForReplies()

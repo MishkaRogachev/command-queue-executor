@@ -11,7 +11,7 @@
 7. [x] Client-side message generator
 8. [x] Server side consumer
 9. [x] O(1) ordered map
-10. [ ] Reconnections with exp tries
+10. [x] Reconnections with exp tries
 11. [ ] Handling multiple clients with gentle shutdown & concurency
 
 
@@ -38,5 +38,5 @@
     Size: 10000, Store Duration: 1.389375ms, Get Duration: 472.25µs, Delete Duration: 1.697792ms
     Size: 100000, Store Duration: 15.396916ms, Get Duration: 4.278042ms, Delete Duration: 13.774958ms
 ```
-NOTE: Linear time indicates O(1) time for store, get, delete
 10. Added alternate random commands producer for more heavlily-loaded testing
+11. Removed retry params since amqp091-go library already handles transient errors

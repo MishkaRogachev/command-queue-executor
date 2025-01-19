@@ -11,6 +11,7 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
+// RandomProducer responsible for sending request to the message queue from a file and promoting responses to a handler
 type RandomProducer struct {
 	client  mq.ClientMQ
 	handler ResponseHandlerFunc
