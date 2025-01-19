@@ -1,19 +1,40 @@
 # command-queue-executor
 
+# Usage
+
+### Run docker container with RabbitMQ
+```
+docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+```
+
+### Override RABBITMQ_URL env variable (optional, default is "amqp://guest:guest@localhost")
+```
+export RABBITMQ_URL="amqp://guest:guest@localhost:5672"
+```
+
+### Start a server
+```
+go run cmd/server/main.go
+```
+
+### Start a client (use new terminal for each client)
+```
+go run cmd/client/main.go
+```
+
 # Plan 
 
 1. [x] Initial structure design
 2. [x] Naive ordered map
 3. [x] Naive stub for message queue
 4. [x] Message queue implementation using RabbitMQ
-5. [ ] Setup CI via Github Actions
+5. [x] Setup CI via Github Actions
 6. [x] Models/Commands types
 7. [x] Client-side message generator
 8. [x] Server side consumer
 9. [x] O(1) ordered map
 10. [x] Reconnections with exp tries
 11. [ ] Handling multiple clients with gentle shutdown & concurency
-
 
 # Devlog
 
@@ -40,3 +61,4 @@
 ```
 10. Added alternate random commands producer for more heavlily-loaded testing
 11. Removed retry params since amqp091-go library already handles transient errors
+12. Added github actions CI and parametrisation for RabbitMQ url

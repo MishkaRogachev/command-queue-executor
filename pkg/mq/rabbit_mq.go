@@ -2,11 +2,21 @@ package mq
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
 )
+
+const defaultRabbitMQURL = "amqp://guest:guest@localhost"
+
+func GetRabbitMQURL() string {
+	if url := os.Getenv("RABBITMQ_URL"); url != "" {
+		return url
+	}
+	return defaultRabbitMQURL
+}
 
 // MessageRabbitMQ represents a message to be sent or received from RabbitMQ
 type MessageRabbitMQ struct {

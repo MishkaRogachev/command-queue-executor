@@ -7,25 +7,9 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
-// Config holds the configuration settings for the server application
-type Config struct {
-	RabbitMQURL string `json:"rabbitmq_url"`
-}
-
-func loadConfig() Config {
-	// Hardcoding config values for simplicity
-	return Config{
-		RabbitMQURL: "amqp://guest:guest@localhost",
-	}
-}
-
 func main() {
-	config := loadConfig()
-
 	// Initialize RabbitMQ server
-	server, err := mq.NewServerRabbitMQ(
-		config.RabbitMQURL,
-	)
+	server, err := mq.NewServerRabbitMQ(mq.GetRabbitMQURL())
 	if err != nil {
 		log.Fatalf("Failed to initialize RabbitMQ server: %v", err)
 	}

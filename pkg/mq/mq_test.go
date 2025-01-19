@@ -107,7 +107,7 @@ func runMessageQueueTests(t *testing.T, clientFactory func() ClientMQ, serverFac
 
 func TestRabbitMQ(t *testing.T) {
 	clientFactory := func() ClientMQ {
-		client, err := NewClientRabbitMQ("amqp://guest:guest@localhost")
+		client, err := NewClientRabbitMQ(GetRabbitMQURL())
 		if err != nil {
 			t.Fatalf("Failed to initialize RabbitMQ client: %v", err)
 		}
@@ -115,7 +115,7 @@ func TestRabbitMQ(t *testing.T) {
 	}
 
 	serverFactory := func() ServerMQ {
-		server, err := NewServerRabbitMQ("amqp://guest:guest@localhost")
+		server, err := NewServerRabbitMQ(GetRabbitMQURL())
 		if err != nil {
 			t.Fatalf("Failed to initialize RabbitMQ server: %v", err)
 		}
