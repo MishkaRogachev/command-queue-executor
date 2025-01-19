@@ -30,6 +30,7 @@ type ClientRabbitMQ struct {
 	conn       *amqp091.Connection
 	channel    *amqp091.Channel
 	replyQueue string
+	routingKey string
 	corrMap    sync.Map
 }
 
@@ -37,12 +38,13 @@ type ClientRabbitMQ struct {
 type ServerRabbitMQ struct {
 	conn        *amqp091.Connection
 	channel     *amqp091.Channel
+	routingKey  string
 	handler     func(string) string
 	handlerLock sync.Mutex
 }
 
 // NewClientRabbitMQ creates a new RabbitMQ client
-func NewClientRabbitMQ(url string) (*ClientRabbitMQ, error) {
+func NewClientRabbitMQ(url, routingKey string) (*ClientRabbitMQ, error) {
 	conn, err := amqp091.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
@@ -72,6 +74,7 @@ func NewClientRabbitMQ(url string) (*ClientRabbitMQ, error) {
 		conn:       conn,
 		channel:    ch,
 		replyQueue: q.Name,
+		routingKey: routingKey,
 	}
 
 	go client.listenForReplies()
@@ -112,8 +115,8 @@ func (c *ClientRabbitMQ) Request(msg string) (<-chan string, error) {
 	c.corrMap.Store(corrID, responseChan)
 
 	err := c.channel.Publish(
-		"",          // Exchange
-		"rpc_queue", // Routing key
+		"",           // Exchange
+		c.routingKey, // Routing key
 		false,
 		false,
 		amqp091.Publishing{
@@ -140,7 +143,7 @@ func (c *ClientRabbitMQ) Close() error {
 }
 
 // NewServerRabbitMQ creates a new RabbitMQ server
-func NewServerRabbitMQ(url string) (*ServerRabbitMQ, error) {
+func NewServerRabbitMQ(url, routingKey string) (*ServerRabbitMQ, error) {
 	conn, err := amqp091.Dial(url)
 	if err != nil {
 		return nil, err
@@ -153,12 +156,12 @@ func NewServerRabbitMQ(url string) (*ServerRabbitMQ, error) {
 	}
 
 	_, err = ch.QueueDeclare(
-		"rpc_queue", // Name
-		false,       // Durable
-		false,       // Delete when unused
-		false,       // Exclusive
-		false,       // No-wait
-		nil,         // Args
+		routingKey, // Name
+		false,      // Durable
+		false,      // Delete when unused
+		false,      // Exclusive
+		false,      // No-wait
+		nil,        // Args
 	)
 	if err != nil {
 		ch.Close()
@@ -167,8 +170,9 @@ func NewServerRabbitMQ(url string) (*ServerRabbitMQ, error) {
 	}
 
 	return &ServerRabbitMQ{
-		conn:    conn,
-		channel: ch,
+		conn:       conn,
+		channel:    ch,
+		routingKey: routingKey,
 	}, nil
 }
 
@@ -177,13 +181,8 @@ func (s *ServerRabbitMQ) ServeHandler(handler func(string) string) error {
 	s.handlerLock.Lock()
 	defer s.handlerLock.Unlock()
 
-	if s.handler != nil {
-		// Clean up previous handler if it exists
-		s.handler = nil
-	}
-
 	deliveries, err := s.channel.Consume(
-		"rpc_queue",
+		s.routingKey,
 		"",
 		true,
 		false,

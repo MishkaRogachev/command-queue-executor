@@ -12,20 +12,23 @@ import (
 type Config struct {
 	Timeout     time.Duration `json:"timeout"`
 	CommandFile string        `json:"command_file"`
+	RoutingKey  string        `json:"routing_key"`
 }
 
 func loadConfig() Config {
-	// Hardcoding config values forn simplicity
+	// Hardcoding config values for simplicity
 	return Config{
 		Timeout:     5 * time.Second,
 		CommandFile: "test_data/test_commands_long.txt",
+		RoutingKey:  "rpc_queue",
 	}
 }
 
 func main() {
 	config := loadConfig()
 
-	client, err := mq.NewClientRabbitMQ(mq.GetRabbitMQURL())
+	// Initialize RabbitMQ client
+	client, err := mq.NewClientRabbitMQ(mq.GetRabbitMQURL(), config.RoutingKey)
 	if err != nil {
 		log.Fatalf("Failed to initialize RabbitMQ client: %v", err)
 	}
@@ -35,12 +38,12 @@ func main() {
 		}
 	}()
 
+	// Simple debug response handler
 	responseHandlerDebug := func(response string) error {
 		log.Printf("<< Received response: %s\n", response)
 		return nil
 	}
 
-	// NOTE: using the same timeout for response await
 	prod := producer.NewFileProducer(client, responseHandlerDebug, config.Timeout)
 
 	err = prod.ReadCommandsFromFile(config.CommandFile)
