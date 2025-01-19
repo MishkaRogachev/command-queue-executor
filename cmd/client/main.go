@@ -8,6 +8,7 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/producer"
 )
 
+// Config holds the configuration settings for the client application
 type Config struct {
 	RabbitMQURL string        `json:"rabbitmq_url"`
 	Timeout     time.Duration `json:"timeout"`

@@ -8,12 +8,14 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 )
 
+// MessageRabbitMQ represents a message to be sent or received from RabbitMQ
 type MessageRabbitMQ struct {
 	Data          string
 	ReplyTo       string
 	CorrelationID string
 }
 
+// ClientRabbitMQ is a RabbitMQ implementation of the ClientMQ interface
 type ClientRabbitMQ struct {
 	conn       *amqp091.Connection
 	channel    *amqp091.Channel
@@ -21,6 +23,7 @@ type ClientRabbitMQ struct {
 	corrMap    sync.Map
 }
 
+// ServerRabbitMQ is a RabbitMQ implementation of the ServerMQ interface
 type ServerRabbitMQ struct {
 	conn        *amqp091.Connection
 	channel     *amqp091.Channel
@@ -28,6 +31,7 @@ type ServerRabbitMQ struct {
 	handlerLock sync.Mutex
 }
 
+// NewClientRabbitMQ creates a new RabbitMQ client
 func NewClientRabbitMQ(url string) (*ClientRabbitMQ, error) {
 	conn, err := amqp091.Dial(url)
 	if err != nil {
@@ -90,6 +94,7 @@ func (c *ClientRabbitMQ) listenForReplies() {
 	}
 }
 
+// Request sends a message to the RabbitMQ server and returns a channel to receive the response
 func (c *ClientRabbitMQ) Request(msg string) (<-chan string, error) {
 	corrID := uuid.New().String()
 
@@ -116,6 +121,7 @@ func (c *ClientRabbitMQ) Request(msg string) (<-chan string, error) {
 	return responseChan, nil
 }
 
+// Close closes the RabbitMQ client
 func (c *ClientRabbitMQ) Close() error {
 	if err := c.channel.Close(); err != nil {
 		return err
@@ -123,6 +129,7 @@ func (c *ClientRabbitMQ) Close() error {
 	return c.conn.Close()
 }
 
+// NewServerRabbitMQ creates a new RabbitMQ server
 func NewServerRabbitMQ(url string) (*ServerRabbitMQ, error) {
 	conn, err := amqp091.Dial(url)
 	if err != nil {
@@ -155,6 +162,7 @@ func NewServerRabbitMQ(url string) (*ServerRabbitMQ, error) {
 	}, nil
 }
 
+// ServeHandler registers a handler function to process messages
 func (s *ServerRabbitMQ) ServeHandler(handler func(string) string) error {
 	s.handlerLock.Lock()
 	defer s.handlerLock.Unlock()
@@ -202,6 +210,7 @@ func (s *ServerRabbitMQ) ServeHandler(handler func(string) string) error {
 	return nil
 }
 
+// Close closes the RabbitMQ server
 func (s *ServerRabbitMQ) Close() error {
 	if err := s.channel.Close(); err != nil {
 		return err

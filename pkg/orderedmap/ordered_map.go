@@ -1,4 +1,4 @@
-package ordered_map
+package orderedmap
 
 import (
 	"errors"
@@ -6,10 +6,13 @@ import (
 )
 
 var (
-	ErrKeyNotFound   = errors.New("key not found")
+	// ErrKeyNotFound is returned when the key is not found
+	ErrKeyNotFound = errors.New("key not found")
+	// ErrInvalidOption is returned when an invalid option is passed to New
 	ErrInvalidOption = errors.New("invalid option passed to New")
 )
 
+// Pair is a key-value pair
 type Pair[K comparable, V any] struct {
 	Key   K
 	Value V
@@ -20,14 +23,17 @@ type initConfig[K comparable, V any] struct {
 	initialData []Pair[K, V]
 }
 
+// InitOption is a function type for configuring the OrderedMap during initialization
 type InitOption[K comparable, V any] func(config *initConfig[K, V])
 
+// WithCapacity sets the initial capacity of the OrderedMap
 func WithCapacity[K comparable, V any](capacity int) InitOption[K, V] {
 	return func(c *initConfig[K, V]) {
 		c.capacity = capacity
 	}
 }
 
+// WithInitialData sets the initial data of the OrderedMap
 func WithInitialData[K comparable, V any](initialData ...Pair[K, V]) InitOption[K, V] {
 	return func(c *initConfig[K, V]) {
 		c.initialData = initialData
@@ -37,6 +43,7 @@ func WithInitialData[K comparable, V any](initialData ...Pair[K, V]) InitOption[
 	}
 }
 
+// OrderedMap is a map that maintains the order of keys
 type OrderedMap[K comparable, V any] struct {
 	mu       sync.RWMutex
 	items    map[K]V
@@ -44,6 +51,7 @@ type OrderedMap[K comparable, V any] struct {
 	indexMap map[K]int // Tracks the position of each key in the 'order' slice
 }
 
+// New creates a new OrderedMap instance
 func New[K comparable, V any](options ...any) (*OrderedMap[K, V], error) {
 	var config initConfig[K, V]
 
@@ -82,6 +90,7 @@ func (om *OrderedMap[K, V]) initialize(capacity int) {
 	om.indexMap = make(map[K]int, capacity)
 }
 
+// Store stores a key-value pair in the map
 func (om *OrderedMap[K, V]) Store(key K, value V) {
 	om.mu.Lock()
 	defer om.mu.Unlock()
@@ -94,6 +103,7 @@ func (om *OrderedMap[K, V]) Store(key K, value V) {
 	om.items[key] = value
 }
 
+// StorePairs stores multiple key-value pairs in the map
 func (om *OrderedMap[K, V]) StorePairs(pairs ...Pair[K, V]) {
 	om.mu.Lock()
 	defer om.mu.Unlock()
@@ -107,6 +117,7 @@ func (om *OrderedMap[K, V]) StorePairs(pairs ...Pair[K, V]) {
 	}
 }
 
+// Delete deletes a key from the map
 func (om *OrderedMap[K, V]) Delete(key K) error {
 	om.mu.Lock()
 	defer om.mu.Unlock()
@@ -131,6 +142,7 @@ func (om *OrderedMap[K, V]) Delete(key K) error {
 	return nil
 }
 
+// Get retrieves a value from the map
 func (om *OrderedMap[K, V]) Get(key K) (V, error) {
 	om.mu.RLock()
 	defer om.mu.RUnlock()
@@ -143,6 +155,7 @@ func (om *OrderedMap[K, V]) Get(key K) (V, error) {
 	return val, nil
 }
 
+// GetAll retrieves all key-value pairs from the map
 func (om *OrderedMap[K, V]) GetAll() []Pair[K, V] {
 	om.mu.RLock()
 	defer om.mu.RUnlock()

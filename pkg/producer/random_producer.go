@@ -20,6 +20,7 @@ type RandomProducer struct {
 	wg      sync.WaitGroup
 }
 
+// NewRandomProducer creates a new RandomProducer instance
 func NewRandomProducer(client mq.ClientMQ, handler ResponseHandlerFunc, timeout time.Duration) *RandomProducer {
 	return &RandomProducer{
 		client:  client,
@@ -54,7 +55,7 @@ func (rp *RandomProducer) Stop() {
 	rp.wg.Wait()
 }
 
-func (rp *RandomProducer) sendCommand(command models.CommandWrapper) {
+func (rp *RandomProducer) sendCommand(command models.RequestWrapper) {
 	rawCommand, err := json.Marshal(command)
 	if err != nil {
 		fmt.Printf("Error serializing command: %v\n", err)
@@ -75,8 +76,8 @@ func (rp *RandomProducer) sendCommand(command models.CommandWrapper) {
 	}
 }
 
-func (rp *RandomProducer) generateRandomCommand() models.CommandWrapper {
-	types := []models.CommandType{models.AddItem, models.DeleteItem, models.GetItem, models.GetAll}
+func (rp *RandomProducer) generateRandomCommand() models.RequestWrapper {
+	types := []models.RequestType{models.AddItem, models.DeleteItem, models.GetItem, models.GetAll}
 	cmdType := types[rand.Intn(len(types))]
 
 	switch cmdType {
@@ -86,7 +87,7 @@ func (rp *RandomProducer) generateRandomCommand() models.CommandWrapper {
 			Value: fmt.Sprintf("value%d", rand.Intn(1000)),
 		}
 		rawPayload, _ := json.Marshal(payload)
-		return models.CommandWrapper{
+		return models.RequestWrapper{
 			Type:    models.AddItem,
 			Payload: rawPayload,
 		}
@@ -96,7 +97,7 @@ func (rp *RandomProducer) generateRandomCommand() models.CommandWrapper {
 			Key: fmt.Sprintf("key%d", rand.Intn(1000)),
 		}
 		rawPayload, _ := json.Marshal(payload)
-		return models.CommandWrapper{
+		return models.RequestWrapper{
 			Type:    models.DeleteItem,
 			Payload: rawPayload,
 		}
@@ -106,21 +107,21 @@ func (rp *RandomProducer) generateRandomCommand() models.CommandWrapper {
 			Key: fmt.Sprintf("key%d", rand.Intn(1000)),
 		}
 		rawPayload, _ := json.Marshal(payload)
-		return models.CommandWrapper{
+		return models.RequestWrapper{
 			Type:    models.GetItem,
 			Payload: rawPayload,
 		}
 
 	case models.GetAll:
 		rawPayload, _ := json.Marshal(models.GetAllItemsRequest{})
-		return models.CommandWrapper{
+		return models.RequestWrapper{
 			Type:    models.GetAll,
 			Payload: rawPayload,
 		}
 
 	default:
 		rawPayload, _ := json.Marshal(models.GetAllItemsRequest{})
-		return models.CommandWrapper{
+		return models.RequestWrapper{
 			Type:    models.GetAll,
 			Payload: rawPayload,
 		}

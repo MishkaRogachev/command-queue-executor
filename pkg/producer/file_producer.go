@@ -12,6 +12,7 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
+// ResponseHandlerFunc is a function type that handles a response message
 type ResponseHandlerFunc func(string) error
 
 // FileProducer responsible for sending request to the message queue from a file and promoting responses to a handler
@@ -21,6 +22,7 @@ type FileProducer struct {
 	timeout time.Duration
 }
 
+// NewFileProducer creates a new FileProducer instance
 func NewFileProducer(client mq.ClientMQ, handler ResponseHandlerFunc, timeout time.Duration) *FileProducer {
 	return &FileProducer{
 		client:  client,
@@ -29,6 +31,7 @@ func NewFileProducer(client mq.ClientMQ, handler ResponseHandlerFunc, timeout ti
 	}
 }
 
+// ReadCommandsFromFile reads commands from a file and sends them to the message queue
 func (p *FileProducer) ReadCommandsFromFile(filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -44,7 +47,7 @@ func (p *FileProducer) ReadCommandsFromFile(filePath string) error {
 		line := scanner.Text()
 		lineCount++
 
-		var cmd models.CommandWrapper
+		var cmd models.RequestWrapper
 		if err := json.Unmarshal([]byte(line), &cmd); err != nil {
 			fmt.Printf("Failed to parse command: %v, skipping line %d", err, lineCount)
 			continue
@@ -52,7 +55,7 @@ func (p *FileProducer) ReadCommandsFromFile(filePath string) error {
 
 		wg.Add(1)
 		// Start a routine to send the command and await the response
-		go func(command models.CommandWrapper) {
+		go func(command models.RequestWrapper) {
 			defer wg.Done()
 
 			rawCommand, err := json.Marshal(command)

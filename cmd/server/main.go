@@ -7,6 +7,7 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
+// Config holds the configuration settings for the server application
 type Config struct {
 	RabbitMQURL string `json:"rabbitmq_url"`
 }

@@ -12,7 +12,7 @@ func TestRequestHandlerOrderedMapWithModels(t *testing.T) {
 
 	// Test AddItem
 	addItemRequest := models.AddItemRequest{Key: "testKey1", Value: "testValue1"}
-	rawAddItem, err := models.SerializeCommand(models.AddItem, addItemRequest)
+	rawAddItem, err := models.SerializeRequest(models.AddItem, addItemRequest)
 	assert.NoError(t, err)
 
 	response := handler.Execute(rawAddItem)
@@ -24,7 +24,7 @@ func TestRequestHandlerOrderedMapWithModels(t *testing.T) {
 
 	// Test GetItem
 	getItemRequest := models.GetItemRequest{Key: "testKey1"}
-	rawGetItem, err := models.SerializeCommand(models.GetItem, getItemRequest)
+	rawGetItem, err := models.SerializeRequest(models.GetItem, getItemRequest)
 	assert.NoError(t, err)
 
 	response = handler.Execute(rawGetItem)
@@ -36,7 +36,7 @@ func TestRequestHandlerOrderedMapWithModels(t *testing.T) {
 
 	// Test DeleteItem
 	deleteItemRequest := models.DeleteItemRequest{Key: "testKey1"}
-	rawDeleteItem, err := models.SerializeCommand(models.DeleteItem, deleteItemRequest)
+	rawDeleteItem, err := models.SerializeRequest(models.DeleteItem, deleteItemRequest)
 	assert.NoError(t, err)
 
 	response = handler.Execute(rawDeleteItem)
@@ -48,7 +48,7 @@ func TestRequestHandlerOrderedMapWithModels(t *testing.T) {
 
 	// Test GetAllItems
 	getAllRequest := models.GetAllItemsRequest{}
-	rawGetAll, err := models.SerializeCommand(models.GetAll, getAllRequest)
+	rawGetAll, err := models.SerializeRequest(models.GetAll, getAllRequest)
 	assert.NoError(t, err)
 
 	response = handler.Execute(rawGetAll)

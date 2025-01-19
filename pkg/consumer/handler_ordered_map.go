@@ -5,15 +5,17 @@ import (
 	"log"
 
 	"github.com/MishkaRogachev/command-queue-executor/pkg/models"
-	"github.com/MishkaRogachev/command-queue-executor/pkg/ordered_map"
+	"github.com/MishkaRogachev/command-queue-executor/pkg/orderedmap"
 )
 
+// RequestHandlerOrderedMap is a request handler that uses an ordered map to store key-value pairs
 type RequestHandlerOrderedMap struct {
-	omap *ordered_map.OrderedMap[string, string]
+	omap *orderedmap.OrderedMap[string, string]
 }
 
+// NewRequestHandlerOrderedMap creates a new RequestHandlerOrderedMap instance
 func NewRequestHandlerOrderedMap() *RequestHandlerOrderedMap {
-	omap, err := ordered_map.New[string, string]()
+	omap, err := orderedmap.New[string, string]()
 	if err != nil {
 		log.Fatalf("Failed to create ordered map: %v", err)
 	}
@@ -22,8 +24,9 @@ func NewRequestHandlerOrderedMap() *RequestHandlerOrderedMap {
 	}
 }
 
+// Execute handles a request message and returns a response message as a string
 func (h *RequestHandlerOrderedMap) Execute(rawRequest string) string {
-	var wrapper models.CommandWrapper
+	var wrapper models.RequestWrapper
 	err := json.Unmarshal([]byte(rawRequest), &wrapper)
 	if err != nil {
 		log.Printf("Failed to deserialize command wrapper: %v", err)

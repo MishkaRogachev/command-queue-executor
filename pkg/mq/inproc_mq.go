@@ -5,15 +5,18 @@ import (
 	"sync"
 )
 
+// InprocMQ is an in-process message queue
 type InprocMQ struct {
 	mu      sync.RWMutex
 	handler func(string) string
 }
 
+// NewInprocMQ creates a new InprocMQ instance
 func NewInprocMQ() *InprocMQ {
 	return &InprocMQ{}
 }
 
+// Request sends a message to the message queue and returns a channel to receive the response
 func (mq *InprocMQ) Request(msg string) (<-chan string, error) {
 	mq.mu.RLock()
 	defer mq.mu.RUnlock()
@@ -31,6 +34,7 @@ func (mq *InprocMQ) Request(msg string) (<-chan string, error) {
 	return replyChan, nil
 }
 
+// ServeHandler registers a handler function to process messages
 func (mq *InprocMQ) ServeHandler(handler func(string) string) error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
@@ -39,6 +43,7 @@ func (mq *InprocMQ) ServeHandler(handler func(string) string) error {
 	return nil
 }
 
+// Close closes the message queue
 func (mq *InprocMQ) Close() error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()

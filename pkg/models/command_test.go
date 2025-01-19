@@ -13,12 +13,12 @@ func TestCommandWrapperSerialization(t *testing.T) {
 			Value: "exampleValue",
 		}
 
-		raw, err := SerializeCommand(AddItem, request)
+		raw, err := SerializeRequest(AddItem, request)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, raw)
 
 		var deserializedRequest AddItemRequest
-		commandType, err := DeserializeCommand(raw, &deserializedRequest)
+		commandType, err := DeserializeRequest(raw, &deserializedRequest)
 		assert.NoError(t, err)
 		assert.Equal(t, AddItem, commandType)
 		assert.Equal(t, request, deserializedRequest)
@@ -45,12 +45,12 @@ func TestCommandWrapperSerialization(t *testing.T) {
 			Key: "exampleKey",
 		}
 
-		raw, err := SerializeCommand(GetItem, request)
+		raw, err := SerializeRequest(GetItem, request)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, raw)
 
 		var deserializedRequest GetItemRequest
-		commandType, err := DeserializeCommand(raw, &deserializedRequest)
+		commandType, err := DeserializeRequest(raw, &deserializedRequest)
 		assert.NoError(t, err)
 		assert.Equal(t, GetItem, commandType)
 		assert.Equal(t, request, deserializedRequest)
@@ -80,15 +80,15 @@ func TestInvalidSerialization(t *testing.T) {
 	t.Run("Deserialize Invalid JSON", func(t *testing.T) {
 		raw := `{"type":"addItem","payload":"{invalid_json"}`
 		var request AddItemRequest
-		_, err := DeserializeCommand(raw, &request)
+		_, err := DeserializeRequest(raw, &request)
 		assert.Error(t, err)
 	})
 
 	t.Run("Deserialize Unknown Command Type", func(t *testing.T) {
 		raw := `{"type":"unknownType","payload":{"key":"exampleKey"}}`
 		var request AddItemRequest
-		commandType, err := DeserializeCommand(raw, &request)
+		commandType, err := DeserializeRequest(raw, &request)
 		assert.NoError(t, err)
-		assert.Equal(t, CommandType("unknownType"), commandType)
+		assert.Equal(t, RequestType("unknownType"), commandType)
 	})
 }
