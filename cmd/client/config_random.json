@@ -1,0 +1,7 @@
+{
+  "timeout_ms": 5000,
+  "random_max": -1,
+  "routing_key": "rpc_queue",
+  "feed_type": "random",
+  "max_pending_requests": 10
+}

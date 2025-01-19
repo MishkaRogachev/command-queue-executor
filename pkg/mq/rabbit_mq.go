@@ -11,6 +11,7 @@ import (
 
 const defaultRabbitMQURL = "amqp://guest:guest@localhost"
 
+// GetRabbitMQURL returns the RabbitMQ URL from the environment or a default value
 func GetRabbitMQURL() string {
 	if url := os.Getenv("RABBITMQ_URL"); url != "" {
 		return url

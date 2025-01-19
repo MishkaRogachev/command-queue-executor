@@ -1,0 +1,7 @@
+{
+  "timeout_ms": 5000,
+  "command_file": "test_data/test_commands_long.txt",
+  "routing_key": "rpc_queue",
+  "feed_type": "file",
+  "max_pending_requests": 10
+}

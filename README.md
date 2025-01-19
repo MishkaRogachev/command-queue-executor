@@ -1,28 +1,33 @@
 # command-queue-executor
 
-# Usage
+## Usage
 
-### Run docker container with RabbitMQ
+1) Run docker container with RabbitMQ
 ```
 docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 ```
 
-### Override RABBITMQ_URL env variable (optional, default is "amqp://guest:guest@localhost")
+2) Override RABBITMQ_URL env variable (optional, default is "amqp://guest:guest@localhost")
 ```
 export RABBITMQ_URL="amqp://guest:guest@localhost:5672"
 ```
 
-### Start a server
+3) Start a server
 ```
 go run cmd/server/main.go
 ```
 
-### Start a client (use new terminal for each client)
+4) Start clients (use new terminal for each client)
+With file request feed:
 ```
-go run cmd/client/main.go
+go run cmd/client/main.go --config "cmd/client/config_file.json"
+```
+With random generated request:
+```
+go run cmd/client/main.go --config "cmd/client/config_random.json"
 ```
 
-# Plan 
+## Plan
 
 1. [x] Initial structure design
 2. [x] Naive ordered map
@@ -34,9 +39,12 @@ go run cmd/client/main.go
 8. [x] Server side consumer
 9. [x] O(1) ordered map
 10. [x] Reconnections with exp tries
-11. [ ] Handling multiple clients with gentle shutdown & concurency
+11. [x] File config
+12. [x] Client pauses if server is not available
+13. [x] Client choose producer
+14. [ ] Fix diagrams and description
 
-# Devlog
+## Devlog
 
 1. Starting with naive ordered map impl using plain map + order array (not even a doubly linked list), benchmark:
 ```
@@ -62,3 +70,4 @@ go run cmd/client/main.go
 10. Added alternate random commands producer for more heavlily-loaded testing
 11. Removed retry params since amqp091-go library already handles transient errors
 12. Added github actions CI and parametrisation for RabbitMQ url
+13. Refactor producer to have more flexible mechanism for testing
