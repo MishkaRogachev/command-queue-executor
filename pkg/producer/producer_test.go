@@ -68,14 +68,30 @@ func responseHandlerDebug(response string) error {
 }
 
 func TestProducerWithFileRequestFeed(t *testing.T) {
-	inprocMQ := mq.NewInprocMQ()
-	inprocMQ.ServeHandler(mockServerHandler)
+	// Create a new inproc server
+	server := mq.NewInprocServer()
+	defer server.Close()
+
+	// Get the requests channel
+	reqCh, err := server.ListenForRequests()
+	assert.NoError(t, err)
+
+	// Start a goroutine to read requests + reply via mockServerHandler
+	go func() {
+		for req := range reqCh {
+			resp := mockServerHandler(req.Data)
+			_ = server.Reply(req.CorrelationID, resp)
+		}
+	}()
+
+	// Create a client linked to the same server
+	client := mq.NewInprocClient(server)
 
 	fileFeed, err := NewFileRequestFeed("../../test_data/test_commands_short.txt")
 	assert.NoError(t, err)
 	defer fileFeed.Close()
 
-	producer := NewProducer(inprocMQ, responseHandlerDebug, fileFeed, 1*time.Second, 10)
+	producer := NewProducer(client, responseHandlerDebug, fileFeed, 1*time.Second, 10)
 
 	producer.Start()
 	producer.Close()
@@ -85,11 +101,27 @@ func TestProducerWithFileRequestFeed(t *testing.T) {
 }
 
 func TestProducerWithRandomRequestFeed(t *testing.T) {
-	inprocMQ := mq.NewInprocMQ()
-	inprocMQ.ServeHandler(mockServerHandler)
+	// Create a new inproc server
+	server := mq.NewInprocServer()
+	defer server.Close()
+
+	// Get the requests channel
+	reqCh, err := server.ListenForRequests()
+	assert.NoError(t, err)
+
+	// Start a goroutine to read requests + reply via mockServerHandler
+	go func() {
+		for req := range reqCh {
+			resp := mockServerHandler(req.Data)
+			_ = server.Reply(req.CorrelationID, resp)
+		}
+	}()
+
+	// Create a client linked to the same server
+	client := mq.NewInprocClient(server)
 
 	randomFeed := NewRandomRequestFeed(50)
-	producer := NewProducer(inprocMQ, responseHandlerDebug, randomFeed, 1*time.Second, 10)
+	producer := NewProducer(client, responseHandlerDebug, randomFeed, 1*time.Second, 10)
 
 	producer.Start()
 	producer.Close()
@@ -99,8 +131,26 @@ func TestProducerWithRandomRequestFeed(t *testing.T) {
 }
 
 func TestConcurrentProducersWithMixedFeeds(t *testing.T) {
-	inprocMQ := mq.NewInprocMQ()
-	inprocMQ.ServeHandler(mockServerHandler)
+	// Create a new inproc server
+	server := mq.NewInprocServer()
+	defer server.Close()
+
+	// Get the requests channel
+	reqCh, err := server.ListenForRequests()
+	assert.NoError(t, err)
+
+	// Start a goroutine to read requests + reply via mockServerHandler
+	go func() {
+		for req := range reqCh {
+			resp := mockServerHandler(req.Data)
+			_ = server.Reply(req.CorrelationID, resp)
+		}
+	}()
+
+	// Create a clients linked to the same server
+	client1 := mq.NewInprocClient(server)
+	client2 := mq.NewInprocClient(server)
+	client3 := mq.NewInprocClient(server)
 
 	// File Feed
 	fileFeed1, err := NewFileRequestFeed("../../test_data/test_commands_medium.txt")
@@ -115,9 +165,9 @@ func TestConcurrentProducersWithMixedFeeds(t *testing.T) {
 	randomFeed := NewRandomRequestFeed(100)
 
 	// Producers
-	producer1 := NewProducer(inprocMQ, responseHandlerDebug, fileFeed1, 1*time.Second, 10)
-	producer2 := NewProducer(inprocMQ, responseHandlerDebug, fileFeed2, 1*time.Second, 10)
-	producer3 := NewProducer(inprocMQ, responseHandlerDebug, randomFeed, 1*time.Second, 10)
+	producer1 := NewProducer(client1, responseHandlerDebug, fileFeed1, 1*time.Second, 10)
+	producer2 := NewProducer(client2, responseHandlerDebug, fileFeed2, 1*time.Second, 10)
+	producer3 := NewProducer(client3, responseHandlerDebug, randomFeed, 1*time.Second, 10)
 
 	var wg sync.WaitGroup
 	wg.Add(3)

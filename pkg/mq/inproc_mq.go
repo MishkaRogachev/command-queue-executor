@@ -1,53 +1,105 @@
 package mq
 
 import (
-	"errors"
+	"fmt"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
-// InprocMQ is an in-process message queue
-type InprocMQ struct {
-	mu      sync.RWMutex
-	handler func(string) string
+// InprocServer is an in-process message queue server
+type InprocServer struct {
+	mu            sync.RWMutex
+	requests      chan Request
+	corrClientMap sync.Map
 }
 
-// NewInprocMQ creates a new InprocMQ instance
-func NewInprocMQ() *InprocMQ {
-	return &InprocMQ{}
-}
-
-// Request sends a message to the message queue and returns a channel to receive the response
-func (mq *InprocMQ) Request(msg string) (<-chan string, error) {
-	mq.mu.RLock()
-	defer mq.mu.RUnlock()
-
-	if mq.handler == nil {
-		return nil, errors.New("no handler registered")
+// NewInprocServer is an in-process message queue client
+func NewInprocServer() *InprocServer {
+	return &InprocServer{
+		requests: make(chan Request),
 	}
-
-	replyChan := make(chan string, 1)
-	go func() {
-		defer close(replyChan)
-		response := mq.handler(msg)
-		replyChan <- response
-	}()
-	return replyChan, nil
 }
 
-// ServeHandler registers a handler function to process messages
-func (mq *InprocMQ) ServeHandler(handler func(string) string) error {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
+// ListenForRequests returns a channel that the user can read from in worker goroutines
+func (s *InprocServer) ListenForRequests() (<-chan Request, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.requests, nil
+}
 
-	mq.handler = handler
+// Reply sends a reply message to the client
+func (s *InprocServer) Reply(corrID, data string) error {
+	v, ok := s.corrClientMap.Load(corrID)
+	if !ok {
+		return fmt.Errorf("no client for correlation ID %s", corrID)
+	}
+	client := v.(*InprocClient)
+	return client.deliverReply(corrID, data)
+}
+
+// Close closes the server
+func (s *InprocServer) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	close(s.requests)
 	return nil
 }
 
-// Close closes the message queue
-func (mq *InprocMQ) Close() error {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
+func (s *InprocServer) acceptRequest(r Request, c *InprocClient) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	mq.handler = nil
+	s.corrClientMap.Store(r.CorrelationID, c)
+	s.requests <- r
+	return nil
+}
+
+// InprocClient is an in-process message queue client
+type InprocClient struct {
+	mu      sync.RWMutex
+	server  *InprocServer
+	corrMap sync.Map
+}
+
+// NewInprocClient creates a new in-process client
+func NewInprocClient(server *InprocServer) *InprocClient {
+	return &InprocClient{server: server}
+}
+
+// Request sends a request message to the server
+func (c *InprocClient) Request(data string) (<-chan string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	corrID := uuid.New().String()
+	replyChan := make(chan string, 1)
+	c.corrMap.Store(corrID, replyChan)
+	req := Request{Data: data, CorrelationID: corrID, ReplyTo: corrID}
+	if err := c.server.acceptRequest(req, c); err != nil {
+		c.corrMap.Delete(corrID)
+		return nil, err
+	}
+	return replyChan, nil
+}
+
+// Close closes the client
+func (c *InprocClient) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return nil
+}
+
+func (c *InprocClient) deliverReply(corrID, data string) error {
+	v, ok := c.corrMap.Load(corrID)
+	if !ok {
+		return nil
+	}
+	replyChan := v.(chan string)
+	replyChan <- data
+	close(replyChan)
+	c.corrMap.Delete(corrID)
 	return nil
 }

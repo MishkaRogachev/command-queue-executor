@@ -42,7 +42,9 @@ go run cmd/client/main.go --config "cmd/client/config_random.json"
 11. [x] File config
 12. [x] Client pauses if server is not available
 13. [x] Client choose producer
-14. [ ] Fix diagrams and description
+14. [x] Workers pool for consumer
+15. [ ] Gentle shutdown
+16. [ ] Fix diagrams and description
 
 ## Devlog
 
@@ -70,4 +72,5 @@ go run cmd/client/main.go --config "cmd/client/config_random.json"
 10. Added alternate random commands producer for more heavlily-loaded testing
 11. Removed retry params since amqp091-go library already handles transient errors
 12. Added github actions CI and parametrisation for RabbitMQ url
-13. Refactor producer to have more flexible mechanism for testing
+13. Refactor producer to have more flexible mechanism for testing and cleaner code
+14. Refactor consumer & server to have concurrent workers. Split request handling to use unbuffered channels

@@ -6,11 +6,10 @@ import (
 	"github.com/MishkaRogachev/command-queue-executor/pkg/mq"
 )
 
-// RequestHandlerFunc is a function type that handles a request message
-// and returns a response message as a string.
+// RequestHandlerFunc handles a request message and returns a response.
 type RequestHandlerFunc func(string) string
 
-// Consumer responsible for consuming requests from the message queue and promoting them to a handler
+// Consumer reads requests from the server, processes them, and replies.
 type Consumer struct {
 	server      mq.ServerMQ
 	handler     RequestHandlerFunc
@@ -19,7 +18,7 @@ type Consumer struct {
 	wg          sync.WaitGroup
 }
 
-// NewConsumer creates a new Consumer instance
+// NewConsumer creates a new Consumer instance.
 func NewConsumer(server mq.ServerMQ, workerCount int, handler RequestHandlerFunc) *Consumer {
 	return &Consumer{
 		server:      server,
@@ -29,30 +28,40 @@ func NewConsumer(server mq.ServerMQ, workerCount int, handler RequestHandlerFunc
 	}
 }
 
-// Start starts the consumer and its worker goroutines
+// Start spawns worker goroutines to process incoming requests.
 func (c *Consumer) Start() error {
-	err := c.server.ServeHandler(c.handler)
+	reqCh, err := c.server.ListenForRequests()
 	if err != nil {
 		return err
 	}
 
 	for i := 0; i < c.workerCount; i++ {
 		c.wg.Add(1)
-		go c.worker()
+		go c.worker(reqCh)
 	}
-
 	return nil
 }
 
-// Stop signals the consumer to stop consuming requests
+// Stop signals the consumer to stop and waits for workers to finish.
 func (c *Consumer) Stop() {
 	close(c.stopChan)
 	c.wg.Wait()
-	c.server.Close()
 }
 
-func (c *Consumer) worker() {
+func (c *Consumer) worker(reqCh <-chan mq.Request) {
 	defer c.wg.Done()
 
-	<-c.stopChan
+	for {
+		select {
+		case req, ok := <-reqCh:
+			if !ok {
+				// The server closed the requests channel
+				return
+			}
+			response := c.handler(req.Data)
+			_ = c.server.Reply(req.CorrelationID, response)
+		case <-c.stopChan:
+			return
+		}
+	}
 }

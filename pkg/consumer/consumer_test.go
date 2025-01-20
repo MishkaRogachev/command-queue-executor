@@ -10,55 +10,55 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Command generator to produce simple commands
+// TODO: replace with RandomRequestFeed
 func generateCommands(count int) []string {
 	commands := make([]string, count)
 	for i := 0; i < count; i++ {
-		// TODO: use models!
 		commands[i] = fmt.Sprintf(`{"type":"addItem","payload":{"key":"key%d","value":"value%d"}}`, i, i)
 	}
 	return commands
 }
 
-func TestConsumerWithInprocMQ(t *testing.T) {
-	// Create an in-process message queue
-	inprocMQ := mq.NewInprocMQ()
+func TestConsumerWithInproc(t *testing.T) {
+	// Create a fresh server
+	server := mq.NewInprocServer()
+	assert.NotNil(t, server)
 
-	// Handler function for the consumer
+	// Create a Consumer with a handler
 	handler := func(msg string) string {
-		fmt.Printf("Processing message: %s\n", msg)
-		return fmt.Sprintf(`{"success":true,"message":"processed %s"}`, msg)
+		fmt.Printf("Handling: %s\n", msg)
+		return fmt.Sprintf(`{"success":true,"message":"processed: %s"}`, msg)
 	}
-
-	// Create the consumer
-	consumer := NewConsumer(inprocMQ, 3, handler)
-
-	// Start the consumer
+	consumer := NewConsumer(server, 3, handler)
 	err := consumer.Start()
-	assert.NoError(t, err, "failed to start consumer")
+	assert.NoError(t, err)
 
-	// Generate and publish commands
+	// Create a client linked to this server
+	client := mq.NewInprocClient(server)
+	assert.NotNil(t, client)
+
+	// Generate some commands
 	commands := generateCommands(10)
+
 	var wg sync.WaitGroup
 	for _, cmd := range commands {
 		wg.Add(1)
 		go func(cmd string) {
 			defer wg.Done()
-			responseChan, err := inprocMQ.Request(cmd)
-			assert.NoError(t, err, "failed to publish command")
+
+			replyChan, err := client.Request(cmd)
+			assert.NoError(t, err)
 
 			select {
-			case response := <-responseChan:
-				fmt.Printf("Received response: %s\n", response)
+			case reply := <-replyChan:
+				fmt.Println("Got reply:", reply)
 			case <-time.After(2 * time.Second):
-				t.Error("Timed out waiting for response")
+				t.Error("Timed out waiting for reply")
 			}
 		}(cmd)
 	}
-
-	// Wait for all commands to be processed
 	wg.Wait()
 
-	// Stop the consumer
 	consumer.Stop()
+	client.Close()
 }
