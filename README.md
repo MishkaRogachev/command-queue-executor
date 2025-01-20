@@ -1,5 +1,11 @@
 # command-queue-executor
 
+![Go CI](https://github.com/MishkaRogachev/command-queue-executor/actions/workflows/ci.yml/badge.svg)
+
+
+<img width="1084" alt="Screenshot 2025-01-20 at 12 04 03" src="https://github.com/user-attachments/assets/643a58b5-3dd5-47ef-9a54-5e69a549f65e" />
+
+
 ## Usage
 
 1) Run docker container with RabbitMQ
@@ -18,6 +24,7 @@ go run cmd/server/main.go
 ```
 
 4) Start clients (use new terminal for each client)
+
 With file request feed:
 ```
 go run cmd/client/main.go --config "cmd/client/config_file.json"
@@ -43,8 +50,7 @@ go run cmd/client/main.go --config "cmd/client/config_random.json"
 12. [x] Client pauses if server is not available
 13. [x] Client choose producer
 14. [x] Workers pool for consumer
-15. [ ] Gentle shutdown
-16. [ ] Fix diagrams and description
+15. [x] Gentle shutdown
 
 ## Devlog
 
